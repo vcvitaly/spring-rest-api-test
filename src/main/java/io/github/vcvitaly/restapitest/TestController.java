@@ -2,8 +2,6 @@ package io.github.vcvitaly.restapitest;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -14,8 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 public class TestController {
-
-    private final ExecutorService executorService = Executors.newFixedThreadPool(4);
 
     @GetMapping("/hello")
     public CompletableFuture<String> helloWorld() {
