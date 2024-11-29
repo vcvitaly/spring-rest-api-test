@@ -62,7 +62,9 @@ public class TestController {
                 .parallel(concurrency)
                 .runOn(Schedulers.newParallel("int-processing", concurrency))
                 .collectSortedList(Comparator.comparingInt(Integer::intValue))
-                .map(list -> String.valueOf(list.stream().mapToInt(Integer::intValue).sum()));
+                .map(list -> String.valueOf(
+                        list.stream().mapToInt(Integer::intValue).sum()
+                ));
     }
 
     private long get() {
@@ -85,8 +87,10 @@ public class TestController {
     }
 
     private int processInt(int i, int limit) {
+        final String message = "Oops";
         if (random.nextInt(limit) == 0) {
-            throw new RuntimeException("Oops");
+            log.error(message);
+            throw new RuntimeException(message);
         }
         try {
             Thread.sleep(100);
