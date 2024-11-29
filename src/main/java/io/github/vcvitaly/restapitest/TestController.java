@@ -17,7 +17,9 @@ public class TestController {
     public CompletableFuture<String> helloWorld() {
         return CompletableFuture.supplyAsync(() -> {
             final String s = String.valueOf(get());
-            log.info("Got {} from get()", s);
+            if (log.isDebugEnabled()) {
+                log.debug("Got {} from get()", s);
+            }
             return s;
         });
     }
