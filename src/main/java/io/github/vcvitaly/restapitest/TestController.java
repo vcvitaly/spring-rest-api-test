@@ -48,11 +48,12 @@ public class TestController {
 
     @GetMapping("/hello-flux/{limit}")
     public Mono<String> helloFlux(@PathVariable Integer limit) {
-        return Flux.fromStream(IntStream.rangeClosed(1, limit).boxed())
+        log.info("Calculating for limit: {}", limit);
+        return Flux.fromIterable(IntStream.rangeClosed(1, limit).boxed().toList())
                 .map(i -> processInt(i, limit))
                 .retryWhen(
                         Retry
-                                .backoff(3, Duration.ofSeconds(5))
+                                .backoff(3, Duration.ofSeconds(2))
                                 .maxBackoff(Duration.ofMinutes(5))
                                 .jitter(0.3)
                                 .doBeforeRetry(signal -> log.warn("load assets: retrying attempt {}", signal.totalRetries() + 1))
