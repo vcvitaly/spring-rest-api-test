@@ -1,7 +1,5 @@
 package io.github.vcvitaly.restapitest;
 
-import java.time.Duration;
-import java.util.Comparator;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -9,20 +7,19 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
-import reactor.util.retry.Retry;
 
 @Slf4j
 @RestController
 public class TestController {
 
     private final Random random = new Random();
-    private final int concurrency = Runtime.getRuntime().availableProcessors() * 2;
+    private final int concurrency = concurrency(4, 8);
+    private ForkJoinPool forkJoinPool = new ForkJoinPool(concurrency);
 
     @GetMapping("/hello")
     public CompletableFuture<String> helloWorld() {
@@ -46,25 +43,37 @@ public class TestController {
         }
     }
 
+    @ResponseStatus(HttpStatus.OK)
     @GetMapping("/hello-flux/{limit}")
-    public Mono<String> helloFlux(@PathVariable Integer limit) {
+    public String helloFlux(@PathVariable Integer limit) {
+        final long start = System.nanoTime();
         log.info("Calculating for limit: {}", limit);
-        return Flux.fromIterable(IntStream.rangeClosed(1, limit).boxed().toList())
-                .map(i -> processInt(i, limit))
-                .retryWhen(
-                        Retry
-                                .backoff(3, Duration.ofSeconds(2))
-                                .maxBackoff(Duration.ofMinutes(5))
-                                .jitter(0.3)
-                                .doBeforeRetry(signal -> log.warn("load assets: retrying attempt {}", signal.totalRetries() + 1))
-                )
-                .doOnError(t -> log.error("Error while processing ints: ", t))
-                .parallel(concurrency)
-                .runOn(Schedulers.newParallel("int-processing", concurrency))
-                .collectSortedList(Comparator.comparingInt(Integer::intValue))
-                .map(list -> String.valueOf(
-                        list.stream().mapToInt(Integer::intValue).sum()
-                ));
+
+        final Integer res;
+        try {
+            res = forkJoinPool.submit(
+                    () -> IntStream.rangeClosed(1, limit).boxed()
+                            .parallel()
+                            .map(i -> {
+                                try {
+                                    return processInt(i, limit);
+                                } catch (Exception e) {
+                                    log.error("Error while processing ints: ", e);
+                                    return 0;
+                                }
+                            })
+                            .mapToInt(Integer::intValue)
+                            .sum()
+            ).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+
+        log.info(
+                "process ints: Done. Elapsed time: {} ms", (System.nanoTime() - start) / 1_000_000
+        );
+
+        return String.valueOf(res);
     }
 
     private long get() {
@@ -89,7 +98,6 @@ public class TestController {
     private int processInt(int i, int limit) {
         final String message = "Oops";
         if (random.nextInt(limit) == 0) {
-            log.error(message);
             throw new RuntimeException(message);
         }
         try {
@@ -97,6 +105,11 @@ public class TestController {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+        log.info("Calculated for {}", i);
         return i;
+    }
+
+    private int concurrency(int lowerBound, int upperBound) {
+        return Math.min(upperBound, Math.max(lowerBound, Runtime.getRuntime().availableProcessors() * 2));
     }
 }
